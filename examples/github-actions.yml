@@ -1,0 +1,75 @@
+# AI Red Team - GitHub Actions CI/CD 集成示例
+name: AI Red Team Security Test
+
+on:
+  pull_request:
+    paths:
+      - 'prompts/**'
+      - 'config/model*.yaml'
+      - 'system_prompt.txt'
+  schedule:
+    - cron: '0 2 * * *'  # 每天凌晨2点运行
+  workflow_dispatch:       # 手动触发
+
+jobs:
+  redteam:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install AI Red Team
+        run: pip install ai-redteam
+
+      # ---- 快速PR检查（Gate 1）----
+      - name: Run AI Red Team (PR Check)
+        if: github.event_name == 'pull_request'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AI_REDTARGET_MODEL: ${{ vars.AI_TARGET_MODEL || 'gpt-4o-mini' }}
+        run: |
+          ai-redteam \
+            --provider openai \
+            --model $AI_REDTARGET_MODEL \
+            --categories prompt_injection system_prompt_leak jailbreak \
+            --threshold 0.85 \
+            --concurrent 3 \
+            --formats junit \
+            --output-dir ./redteam-results
+
+      # ---- 完整扫描（Gate 2）----
+      - name: Run AI Red Team (Full Scan)
+        if: github.event_name != 'pull_request'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AI_REDTARGET_MODEL: ${{ vars.AI_TARGET_MODEL || 'gpt-4o-mini' }}
+        run: |
+          ai-redteam \
+            --provider openai \
+            --model $AI_REDTARGET_MODEL \
+            --mutate --mutations 2 \
+            --threshold 0.85 \
+            --concurrent 5 \
+            --formats json html junit \
+            --output-dir ./redteam-results
+
+      # ---- 发布测试报告 ----
+      - name: Publish Test Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ai-redteam-report
+          path: ./redteam-results/
+          retention-days: 30
+
+      - name: Publish JUnit Results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: AI Red Team Results
+          path: ./redteam-results/redteam-report.junit.xml
+          reporter: java-junit
