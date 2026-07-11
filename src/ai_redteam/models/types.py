@@ -39,6 +39,15 @@ class AttackVector(str, Enum):
     MULTILINGUAL = "multilingual"
     MULTI_TURN = "multi_turn"
     DATA_EXFILTRATION = "data_exfiltration"
+    # 偏门攻击向量
+    PDF_EMBED = "pdf_embed"
+    IMAGE_INJECTION = "image_injection"
+    URL_INJECTION = "url_injection"
+    MARKDOWN_RENDER = "markdown_render"
+    INDIRECT_TOOL_OUTPUT = "indirect_tool_output"
+    CHUNKED_DELIVERY = "chunked_delivery"
+    UNICODE_HOMOGLYPH = "unicode_homoglyph"
+    TOKEN_SMUGGLING = "token_smuggling"
 
 
 # 各漏洞类别的最低安全评分阈值
@@ -70,10 +79,21 @@ class Probe:
     description: str = ""
     tags: list = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
+    rounds: list = field(default_factory=list)  # 多轮对话：每轮的 {{ROLE}}: {{CONTENT}}
 
     def render(self) -> str:
         """渲染最终探测文本"""
         return self.template.replace("{{PAYLOAD}}", self.payload)
+
+    def render_multi_turn(self) -> list:
+        """渲染多轮对话探测，返回 [{"role": str, "content": str}, ...]"""
+        if not self.rounds:
+            return [{"role": "user", "content": self.render()}]
+        result = []
+        for r in self.rounds:
+            content = r["content"].replace("{{PAYLOAD}}", self.payload)
+            result.append({"role": r.get("role", "user"), "content": content})
+        return result
 
 
 @dataclass

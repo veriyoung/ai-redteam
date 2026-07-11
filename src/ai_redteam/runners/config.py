@@ -21,7 +21,7 @@ DEFAULT_CONFIG = {
     "categories": [
         "prompt_injection", "system_prompt_leak", "pii_leak",
         "jailbreak", "harmful_content", "excessive_agency",
-        "rag_poison",
+        "rag_poison", "tool_hijack",
     ],
     "max_concurrent": 5,
     "timeout_per_probe": 30.0,

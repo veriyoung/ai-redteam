@@ -16,6 +16,18 @@ from ..models.adapter import BaseModelAdapter, create_adapter
 from ..probes.library import get_all_probes, get_probes_by_category, load_custom_probes
 from .judge import BaseJudge, create_judge, KeywordJudge
 
+# 需要文件上下文包装的攻击向量
+FILE_CONTEXT_VECTORS = {
+    AttackVector.PDF_EMBED: "pdf",
+    AttackVector.IMAGE_INJECTION: "pdf",
+    AttackVector.URL_INJECTION: "web",
+    AttackVector.INDIRECT_TOOL_OUTPUT: "tool_output",
+    AttackVector.MARKDOWN_RENDER: "pdf",
+}
+
+# 需要多轮执行的攻击向量
+MULTI_TURN_VECTORS = {AttackVector.MULTI_TURN, AttackVector.CHUNKED_DELIVERY}
+
 
 # 保持向后兼容：AIJudge = KeywordJudge
 AIJudge = KeywordJudge
@@ -39,10 +51,19 @@ class TestRunner:
 
     async def run_single(self, probe: Probe, system_prompt: str = "") -> ProbeResult:
         """执行单条探测"""
-        prompt_text = probe.render()
         start = time.monotonic()
         try:
-            response, latency = await self.adapter.complete(prompt_text, system_prompt)
+            if probe.vector in MULTI_TURN_VECTORS and probe.rounds:
+                rounds = probe.render_multi_turn()
+                response, latency = await self.adapter.multi_turn_complete(rounds, system_prompt)
+            elif probe.vector in FILE_CONTEXT_VECTORS:
+                prompt_text = probe.render()
+                file_type = FILE_CONTEXT_VECTORS.get(probe.vector, "pdf")
+                wrapped_prompt = self.adapter.wrap_file_context(prompt_text, file_type)
+                response, latency = await self.adapter.complete(wrapped_prompt, system_prompt)
+            else:
+                prompt_text = probe.render()
+                response, latency = await self.adapter.complete(prompt_text, system_prompt)
         except Exception as e:
             latency = (time.monotonic() - start) * 1000
             return ProbeResult(
@@ -50,7 +71,6 @@ class TestRunner:
                 severity=probe.severity, error=str(e), latency_ms=latency,
             )
 
-        # 根据裁判类型选择同步/异步判定
         if self._async_judge:
             passed, score, reasoning = await self.judge.judge_async(probe, response)
         else:

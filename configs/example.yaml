@@ -18,6 +18,7 @@ categories:
   - harmful_content
   - excessive_agency
   - rag_poison
+  - tool_hijack
 
 # 并发设置
 max_concurrent: 5
