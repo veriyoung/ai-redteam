@@ -10,7 +10,8 @@ import time
 
 from .models.types import VulnCategory, TestRunConfig
 from .models.adapter import create_adapter
-from .probes.library import get_all_probes, get_probes_by_category, load_custom_probes
+from .probes.loader import load_preset_probes, load_custom_probes, load_custom_dir, DEFAULT_PRESETS
+from .probes.library import get_all_probes, get_probes_by_category
 from .mutators.engine import Mutator
 from .runners.tester import TestRunner
 from .runners.config import load_config, load_config_dict
@@ -19,15 +20,24 @@ from .reporters.engine import ReportEngine
 
 
 def build_probes(config: TestRunConfig, do_mutate: bool = False):
-    """构建探测用例列表"""
-    probes = []
-    for cat in config.categories:
-        probes.extend(get_probes_by_category(cat))
+    """构建探测用例列表（支持 YAML 预设 + 自定义目录）"""
+    presets = getattr(config, "presets", None) or DEFAULT_PRESETS
+    probes = load_preset_probes(presets)
 
-    # 加载自定义探测
-    custom_paths = getattr(config.config, "custom_probes", []) if hasattr(config, "config") else []
+    # 按类别过滤
+    if config.categories:
+        cat_values = {c if isinstance(c, str) else c.value for c in config.categories}
+        probes = [p for p in probes if p.category.value in cat_values]
+
+    # 加载自定义探测文件
+    custom_paths = getattr(config, "custom_probes", []) or []
     for path in custom_paths:
         probes.extend(load_custom_probes(path))
+
+    # 加载自定义探测目录
+    custom_dir = getattr(config, "custom_probes_dir", "") or ""
+    if custom_dir:
+        probes.extend(load_custom_dir(custom_dir))
 
     # 变异
     if do_mutate:
@@ -70,7 +80,9 @@ async def run(config: TestRunConfig, do_mutate: bool = False, output_dir: str = 
     print(f"\n🛡️ AI Red Team - {config.name}")
     print(f"   目标: {config.target.get('provider', 'openai')}/{config.target.get('model', 'unknown')}")
     print(f"   裁判模式: {judge_label}")
-    print(f"   类别: {', '.join(c.value for c in config.categories)}")
+    presets_info = getattr(config, "presets", DEFAULT_PRESETS)
+    print(f"   预设: {', '.join(presets_info)}")
+    print(f"   类别: {', '.join(c.value if hasattr(c, 'value') else c for c in config.categories)}")
 
     # 构建探测
     probes = build_probes(config, do_mutate)
@@ -153,6 +165,8 @@ def main():
     parser.add_argument("--base-url", help="API基础URL (用于兼容API)")
     parser.add_argument("--system-prompt", help="系统提示词 (测试目标模型的system prompt)")
     parser.add_argument("--categories", nargs="+", help="要测试的漏洞类别 (默认全部)")
+    parser.add_argument("--presets", nargs="+", help="探测定制预设组: owasp, unconventional, zh_cn, all (默认全部)")
+    parser.add_argument("--custom-probes-dir", help="自定义探测YAML/JSON目录路径")
     parser.add_argument("--mutate", action="store_true", help="启用探测变异")
     parser.add_argument("--mutations", type=int, default=2, help="每条探测的变异数量 (默认2)")
     parser.add_argument("--concurrent", type=int, default=5, help="最大并发数 (默认5)")
@@ -199,9 +213,11 @@ def main():
                 "timeout": args.timeout,
             },
             "categories": args.categories or [c.value for c in VulnCategory],
+            "presets": args.presets or DEFAULT_PRESETS,
             "max_concurrent": args.concurrent,
             "overall_threshold": args.threshold,
             "output_formats": args.formats,
+            "custom_probes_dir": args.custom_probes_dir or "",
         }
         config = load_config_dict(config_dict)
         config.mutations_per_probe = args.mutations

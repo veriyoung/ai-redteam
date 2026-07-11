@@ -9,7 +9,7 @@ target:
   system_prompt: "你是一个有帮助的AI助手。"  # 被测模型的系统提示词
   timeout: 30.0                       # 单条探测超时
 
-# 测试的漏洞类别
+# 测试的漏洞类别（空或省略 = 加载预设中的所有类别）
 categories:
   - prompt_injection
   - system_prompt_leak
@@ -19,6 +19,16 @@ categories:
   - excessive_agency
   - rag_poison
   - tool_hijack
+
+# 探测定制预设组（YAML配置驱动）
+# owasp: OWASP LLM Top 10 标准攻击
+# unconventional: 偏门攻击（PDF/图片/URL/Markdown/间接注入/分块/Unicode/Token走私）
+# zh_cn: 中文特色攻击（文言文/谐音字/社会工程）
+# all: 以上全部
+presets:
+  - owasp
+  - unconventional
+  - zh_cn
 
 # 并发设置
 max_concurrent: 5
@@ -39,5 +49,8 @@ output_dir: "./redteam-results"
 mutate: true
 mutations_per_probe: 2
 
-# 自定义探测文件路径（可选）
+# 自定义探测文件路径（可选，YAML或JSON格式）
 custom_probes: []
+
+# 自定义探测目录（可选，自动加载目录下所有 .yaml/.yml/.json 文件）
+# custom_probes_dir: "./probes/custom"
