@@ -98,11 +98,11 @@ class OpenAIAdapter(BaseModelAdapter):
 
 
 class AnthropicAdapter(BaseModelAdapter):
-    """Anthropic Claude适配器"""
+    """Anthropic Claude适配器（兼容代理）"""
 
     def __init__(self, api_key: str = "", model: str = "claude-3-haiku-20240307",
-                 timeout: float = 30.0, system_prompt: str = ""):
-        super().__init__(api_key, "https://api.anthropic.com/v1", timeout)
+                 timeout: float = 30.0, system_prompt: str = "", base_url: str = ""):
+        super().__init__(api_key, base_url or "https://api.anthropic.com/v1", timeout)
         self.model = model
         self.system_prompt = system_prompt
 
@@ -307,7 +307,8 @@ def create_adapter(config: dict) -> BaseModelAdapter:
         )
     elif provider == "anthropic":
         return AnthropicAdapter(api_key=api_key, model=model or "claude-3-haiku-20240307",
-                                timeout=timeout, system_prompt=system_prompt)
+                                timeout=timeout, system_prompt=system_prompt,
+                                base_url=base_url)
     else:
         return OpenAIAdapter(
             api_key=api_key,

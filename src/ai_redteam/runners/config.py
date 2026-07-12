@@ -75,10 +75,13 @@ def load_config(filepath: str) -> TestRunConfig:
 
     target = config.get("target", {})
 
-    # 如果配置文件中 provider 为空或未设置，尝试从 --mock 推断
+    # 如果配置文件中 provider 为空或未设置，尝试推断
     if not target.get("provider") or target.get("provider") == "openai":
-        api_key = target.get("api_key", "") or ""
-        if not api_key and not os.environ.get("OPENAI_API_KEY"):
+        api_key = target.get("api_key") or ""
+        # 配置明确设置了空 api_key，或者在配置和环境变量中都没有 api_key
+        has_explicit_empty = "api_key" in target and not api_key
+        has_no_key_anywhere = not api_key and not os.environ.get("OPENAI_API_KEY")
+        if has_explicit_empty or has_no_key_anywhere:
             print(" 未检测到 API 密钥，将自动切换到 Mock 模式。")
             print("   设置 OPENAI_API_KEY 环境变量或修改配置文件中的 api_key 以使用真实模型。")
             target["provider"] = "mock"
