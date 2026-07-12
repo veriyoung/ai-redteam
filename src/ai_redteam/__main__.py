@@ -128,6 +128,12 @@ def main():
   # 使用Mock模型快速演示（关键词裁判，默认）
   python -m ai_redteam --mock
 
+  # 使用配置文件 + Mock模型组合（调试配置文件用）
+  python -m ai_redteam --config redteam.yaml --mock
+
+  # 使用配置文件 + 覆盖部分参数
+  python -m ai_redteam --config redteam.yaml --categories prompt_injection --threshold 0.90
+
   # 使用OpenAI API测试
   python -m ai_redteam --provider openai --model gpt-4o-mini --api-key sk-xxx
 
@@ -159,7 +165,7 @@ def main():
 
     parser.add_argument("--config", "-c", help="YAML配置文件路径")
     parser.add_argument("--mock", action="store_true", help="使用Mock模型（演示/测试）")
-    parser.add_argument("--provider", choices=["openai", "anthropic", "mock"], help="模型提供商")
+    parser.add_argument("--provider", choices=["openai", "anthropic", "mock", "pollinations"], help="模型提供商")
     parser.add_argument("--model", help="模型名称")
     parser.add_argument("--api-key", help="API密钥 (或设置OPENAI_API_KEY环境变量)")
     parser.add_argument("--base-url", help="API基础URL (用于兼容API)")
@@ -202,6 +208,26 @@ def main():
     # 加载配置
     if args.config:
         config = load_config(args.config)
+        # --config 可与 --mock 组合：强制使用 Mock 模型
+        if args.mock:
+            config.target["provider"] = "mock"
+            config.target["model"] = "mock"
+        # --config 可与 --categories 组合：覆盖配置文件中的类别
+        if args.categories:
+            from .runners.config import _parse_categories
+            config.categories = _parse_categories(args.categories, source="命令行参数")
+        # --config 可与 --presets 组合
+        if args.presets:
+            config.presets = args.presets
+        # --config 可与 --mutate 组合
+        if args.mutate:
+            config.mutations_per_probe = args.mutations
+        # --config 可与 --threshold 组合
+        if args.threshold != 0.80:
+            config.overall_threshold = args.threshold
+        # --config 可与 --formats 组合
+        if args.formats != ["json", "html"]:
+            config.output_formats = args.formats
     else:
         config_dict = {
             "target": {

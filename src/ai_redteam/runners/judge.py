@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 from ..models.types import Probe
+from ..models.adapter import BaseModelAdapter, create_adapter
 
 
 # ============================================================

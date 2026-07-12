@@ -38,4 +38,13 @@ ai-redteam = "ai_redteam.__main__:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"ai_redteam.probes" = ["*.json"]
+"ai_redteam.probes" = ["*.json", "*.yaml", "*.yml"]
+"ai_redteam.probes.presets" = ["*.yaml", "*.yml", "*.json"]
+"ai_redteam.probes.presets.owasp" = ["*.yaml", "*.yml"]
+"ai_redteam.probes.presets.unconventional" = ["*.yaml", "*.yml"]
+"ai_redteam.probes.presets.zh_cn" = ["*.yaml", "*.yml"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
