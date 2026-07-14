@@ -23,7 +23,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install AI Red Team
-        run: pip install ai-redteam
+        run: pip install -e .
 
       # ---- 快速PR检查（Gate 1）----
       - name: Run AI Red Team (PR Check)

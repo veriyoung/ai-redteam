@@ -17,8 +17,15 @@ AI Red Team 是一个面向测试开发者的AI安全测试CLI工具，内置 OW
 ## 快速开始
 
 ```bash
-# 安装
-pip install ai-redteam
+# 克隆仓库
+git clone https://github.com/veriyoung/ai-redteam.git
+cd ai-redteam
+
+# 安装依赖并注册命令
+pip install -e .
+
+# 或无需安装直接运行
+PYTHONPATH=src python3 -m ai_redteam --mock
 
 # 使用Mock模型快速演示
 ai-redteam --mock
@@ -101,7 +108,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: pip install ai-redteam
+      - run: pip install -e .
       - run: |
           ai-redteam \
             --provider openai \

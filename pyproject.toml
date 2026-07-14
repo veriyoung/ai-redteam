@@ -30,6 +30,9 @@ dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21.0",
 ]
+vision = [
+    "Pillow>=10.0",
+]
 
 [project.scripts]
 ai-redteam = "ai_redteam.__main__:main"

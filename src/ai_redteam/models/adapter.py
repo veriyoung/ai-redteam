@@ -17,6 +17,27 @@ FILE_CONTEXT_TEMPLATES = {
     "markdown_img": "用户发送了一张图片，图片中显示：[An image containing the text: \"{content}\"]",
 }
 
+# Vision 模型名称匹配模式（用于自动检测模型是否支持图片输入）
+VISION_MODEL_PATTERNS = [
+    "gpt-4o", "gpt-4-turbo", "gpt-4-vision", "o1", "o3", "o4",
+    "claude-3", "claude-3.5", "claude-3.7",
+    "gemini-1.5", "gemini-2.", "gemini-pro-vision",
+    "qwenvl", "qwen-vl", "qwen2-vl", "qwen2.5-vl",
+    "glm-4v", "cogvlm", "cogview",
+    "llava", "bakllava", "minicpm-v", "internvl", "internlm-xcomposer",
+    "yi-vl", "deepseek-vl", "phi-3-vision", "phi-3.5-vision",
+    "pixtral", "llama-3.2-vision", "llama-3.2-11b-vision",
+    "vision", "multimodal",
+]
+
+
+def _detect_vision_model(model_name: str) -> bool:
+    """根据模型名称自动判断是否支持 vision 能力"""
+    if not model_name:
+        return False
+    name_lower = model_name.lower()
+    return any(pattern.lower() in name_lower for pattern in VISION_MODEL_PATTERNS)
+
 
 class BaseModelAdapter(ABC):
     """模型适配器基类"""
@@ -25,6 +46,12 @@ class BaseModelAdapter(ABC):
         self.api_key = api_key
         self.base_url = base_url
         self.timeout = timeout
+        self._model_name = ""
+
+    @property
+    def supports_vision(self) -> bool:
+        """自动检测当前模型是否支持 vision（图片输入）"""
+        return _detect_vision_model(self._model_name)
 
     @abstractmethod
     async def complete(self, prompt: str, system_prompt: str = "") -> tuple[str, float]:
@@ -46,6 +73,12 @@ class BaseModelAdapter(ABC):
         template = FILE_CONTEXT_TEMPLATES.get(file_type, FILE_CONTEXT_TEMPLATES["pdf"])
         return template.format(content=probe_text, url=url or "https://example.com/doc")
 
+    async def complete_with_image(self, text_prompt: str, image_base64: str,
+                                   system_prompt: str = "") -> tuple[str, float]:
+        """发送带图片的请求。子类覆盖实现真正多模态调用；默认退回文本模拟。"""
+        fallback = self.wrap_file_context(text_prompt, "markdown_img")
+        return await self.complete(fallback, system_prompt)
+
 
 class OpenAIAdapter(BaseModelAdapter):
     """OpenAI / 兼容API适配器（支持DeepSeek、Qwen等）"""
@@ -54,6 +87,7 @@ class OpenAIAdapter(BaseModelAdapter):
                  model: str = "gpt-4o-mini", timeout: float = 30.0, system_prompt: str = ""):
         super().__init__(api_key, base_url, timeout)
         self.model = model
+        self._model_name = model
         self.system_prompt = system_prompt
 
     async def complete(self, prompt: str, system_prompt: str = "") -> tuple[str, float]:
@@ -96,6 +130,55 @@ class OpenAIAdapter(BaseModelAdapter):
             latency = (time.monotonic() - start) * 1000
             return f"[ERROR] {e}", latency
 
+    async def complete_with_image(self, text_prompt: str, image_base64: str,
+                                   system_prompt: str = "") -> tuple[str, float]:
+        """OpenAI vision 格式：发送 base64 图片 + 文本"""
+        import asyncio as _asyncio
+        import json
+        import os
+        import subprocess
+
+        url = f"{self.base_url}/chat/completions"
+        messages = []
+        sys = system_prompt or self.system_prompt
+        if sys:
+            messages.append({"role": "system", "content": sys})
+        messages.append({
+            "role": "user",
+            "content": [
+                {"type": "text", "text": text_prompt},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}},
+            ],
+        })
+        payload = {"model": self.model, "messages": messages, "max_tokens": 1024, "temperature": 0.0}
+
+        start = time.monotonic()
+        try:
+            def _sync_call():
+                data = json.dumps(payload)
+                result = subprocess.run(
+                    ["curl", "-s", "-L", "--max-time", str(int(self.timeout)),
+                     url,
+                     "-H", "Content-Type: application/json",
+                     "-H", "Accept: application/json",
+                     "-H", "User-Agent: Mozilla/5.0",
+                     "-H", f"Authorization: Bearer {self.api_key}",
+                     "-d", data],
+                    capture_output=True, text=True,
+                    env=os.environ.copy(),
+                )
+                if result.returncode != 0 or not result.stdout.strip():
+                    raise RuntimeError(f"HTTP request failed (code {result.returncode})")
+                return json.loads(result.stdout)
+
+            data = await _asyncio.to_thread(_sync_call)
+            latency = (time.monotonic() - start) * 1000
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            return content, latency
+        except Exception as e:
+            latency = (time.monotonic() - start) * 1000
+            return f"[ERROR] {e}", latency
+
 
 class AnthropicAdapter(BaseModelAdapter):
     """Anthropic Claude适配器（兼容代理）"""
@@ -104,6 +187,7 @@ class AnthropicAdapter(BaseModelAdapter):
                  timeout: float = 30.0, system_prompt: str = "", base_url: str = ""):
         super().__init__(api_key, base_url or "https://api.anthropic.com/v1", timeout)
         self.model = model
+        self._model_name = model
         self.system_prompt = system_prompt
 
     async def complete(self, prompt: str, system_prompt: str = "") -> tuple[str, float]:
@@ -144,9 +228,63 @@ class AnthropicAdapter(BaseModelAdapter):
             latency = (time.monotonic() - start) * 1000
             return f"[ERROR] {str(e)}", latency
 
+    async def complete_with_image(self, text_prompt: str, image_base64: str,
+                                   system_prompt: str = "") -> tuple[str, float]:
+        """Anthropic vision 格式：发送 base64 图片 + 文本"""
+        import aiohttp
+        url = f"{self.base_url}/messages"
+        headers = {
+            "x-api-key": self.api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.model,
+            "max_tokens": 1024,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": text_prompt},
+                    {"type": "image", "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": image_base64,
+                    }},
+                ],
+            }],
+        }
+        sys = system_prompt or self.system_prompt
+        if sys:
+            payload["system"] = sys
+
+        start = time.monotonic()
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload, headers=headers,
+                                        timeout=aiohttp.ClientTimeout(total=self.timeout)) as resp:
+                    data = await resp.json()
+                    latency = (time.monotonic() - start) * 1000
+                    if resp.status == 200:
+                        blocks = data.get("content", [])
+                        content = " ".join(b.get("text", "") for b in blocks if b.get("type") == "text")
+                        return content or "", latency
+                    else:
+                        error_msg = data.get("error", {}).get("message", f"HTTP {resp.status}")
+                        return f"[ERROR] {error_msg}", latency
+        except asyncio.TimeoutError:
+            latency = (time.monotonic() - start) * 1000
+            return "[ERROR] Request timeout", latency
+        except Exception as e:
+            latency = (time.monotonic() - start) * 1000
+            return f"[ERROR] {str(e)}", latency
+
 
 class MockAdapter(BaseModelAdapter):
     """Mock适配器，用于测试和演示，支持多种对抗场景的模拟响应"""
+
+    @property
+    def supports_vision(self) -> bool:
+        return False
 
     # 危险/有害内容关键词
     DANGER_KEYWORDS = [

@@ -13,6 +13,7 @@ from ..models.types import (
     SEVERITY_THRESHOLDS,
 )
 from ..models.adapter import BaseModelAdapter, create_adapter
+from ..models.image_utils import generate_attack_image
 from ..probes.library import get_all_probes, get_probes_by_category, load_custom_probes
 from .judge import BaseJudge, create_judge, KeywordJudge
 
@@ -56,6 +57,15 @@ class TestRunner:
             if probe.vector in MULTI_TURN_VECTORS and probe.rounds:
                 rounds = probe.render_multi_turn()
                 response, latency = await self.adapter.multi_turn_complete(rounds, system_prompt)
+            elif probe.vector == AttackVector.IMAGE_INJECTION and self.adapter.supports_vision:
+                prompt_text = probe.render()
+                image_b64 = generate_attack_image(probe.payload)
+                if image_b64:
+                    response, latency = await self.adapter.complete_with_image(
+                        prompt_text, image_b64, system_prompt)
+                else:
+                    wrapped_prompt = self.adapter.wrap_file_context(prompt_text, "pdf")
+                    response, latency = await self.adapter.complete(wrapped_prompt, system_prompt)
             elif probe.vector in FILE_CONTEXT_VECTORS:
                 prompt_text = probe.render()
                 file_type = FILE_CONTEXT_VECTORS.get(probe.vector, "pdf")
