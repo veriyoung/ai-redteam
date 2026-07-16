@@ -15,16 +15,19 @@ PRESET_GROUPS = {
     "owasp": os.path.join(_PRESETS_DIR, "presets", "owasp"),
     "unconventional": os.path.join(_PRESETS_DIR, "presets", "unconventional"),
     "zh_cn": os.path.join(_PRESETS_DIR, "presets", "zh_cn"),
+    "mcp": os.path.join(_PRESETS_DIR, "presets", "mcp"),
+    "memory": os.path.join(_PRESETS_DIR, "presets", "memory"),
+    "agent": os.path.join(_PRESETS_DIR, "presets", "agent"),
     "all_unconventional": os.path.join(_PRESETS_DIR, "presets", "unconventional"),
 }
 
 PRESET_ALIASES = {
-    "all": ["owasp", "unconventional", "zh_cn"],
-    "full": ["owasp", "unconventional", "zh_cn"],
+    "all": ["owasp", "unconventional", "zh_cn", "mcp", "memory", "agent"],
+    "full": ["owasp", "unconventional", "zh_cn", "mcp", "memory", "agent"],
     "unconventional": ["unconventional"],
 }
 
-DEFAULT_PRESETS = ["owasp", "unconventional", "zh_cn"]
+DEFAULT_PRESETS = ["owasp", "unconventional", "zh_cn", "mcp", "memory", "agent"]
 
 
 def _parse_yaml_probes(filepath: str) -> List[Probe]:

@@ -22,7 +22,28 @@ class ReportEngine:
         """生成所有格式的报告"""
         formats = formats or self.report.config.output_formats
         for fmt in formats:
-            getattr(self, f"generate_{fmt}")()
+            if fmt == "compliance":
+                self.generate_compliance()
+            else:
+                getattr(self, f"generate_{fmt}")()
+
+    def generate_compliance(self):
+        """生成合规审计报告"""
+        from .compliance import generate_compliance_report, generate_compliance_summary_text
+
+        results_by_category = {}
+        for cat_val, cat_report in self.report.category_reports.items():
+            results_by_category[cat_val] = cat_report.results
+
+        filepath = generate_compliance_report(results_by_category, self.output_dir)
+        compliance_data = {}
+        with open(filepath, "r", encoding="utf-8") as f:
+            import json
+            compliance_data = json.load(f)
+        summary = generate_compliance_summary_text(compliance_data)
+        with open(os.path.join(self.output_dir, "redteam-compliance-summary.txt"), "w", encoding="utf-8") as f:
+            f.write(summary)
+        return filepath
 
     def generate_json(self):
         """生成JSON报告"""

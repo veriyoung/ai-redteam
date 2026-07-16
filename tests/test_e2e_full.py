@@ -43,7 +43,7 @@ class TestYamlPresetsE2E:
     def test_all_alias_equals_explicit(self):
         """'all' 别名加载与显式加载结果一致"""
         all_probes = load_preset_probes(["all"])
-        explicit = load_preset_probes(["owasp", "unconventional", "zh_cn"])
+        explicit = load_preset_probes(["owasp", "unconventional", "zh_cn", "mcp", "memory", "agent"])
         assert len(all_probes) == len(explicit)
         all_ids = set(p.id for p in all_probes)
         exp_ids = set(p.id for p in explicit)

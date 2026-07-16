@@ -17,6 +17,7 @@ from .runners.tester import TestRunner
 from .runners.config import load_config, load_config_dict
 from .runners.judge import create_judge, JUDGE_MODES
 from .reporters.engine import ReportEngine
+from .storage import get_storage
 
 
 def build_probes(config: TestRunConfig, do_mutate: bool = False):
@@ -76,8 +77,10 @@ def print_summary(report):
 async def run(config: TestRunConfig, do_mutate: bool = False, output_dir: str = "./redteam-results",
              judge_mode: str = "keyword", judge_config: dict = None):
     """运行测试"""
+    import uuid
+
     judge_label = {"keyword": "关键词匹配", "llm": "LLM-as-Judge", "ensemble": "混合模式"}.get(judge_mode, judge_mode)
-    print(f"\n🛡️ AI Red Team - {config.name}")
+    print(f"\n  AI Red Team - {config.name}")
     print(f"   目标: {config.target.get('provider', 'openai')}/{config.target.get('model', 'unknown')}")
     print(f"   裁判模式: {judge_label}")
     presets_info = getattr(config, "presets", DEFAULT_PRESETS)
@@ -89,15 +92,20 @@ async def run(config: TestRunConfig, do_mutate: bool = False, output_dir: str = 
     print(f"   探测数: {len(probes)}")
 
     if not probes:
-        print("⚠️ 没有可用的探测用例。请检查配置。")
+        print("  没有可用的探测用例。请检查配置。")
         return None
 
     # 初始化运行器
     runner = TestRunner(config, judge_mode=judge_mode, judge_config=judge_config)
     runner.setup()
 
+    # 持久化存储
+    storage = get_storage()
+    run_id = str(uuid.uuid4())
+    storage.start_run(run_id, config.target.get("model", "unknown"), ",".join(presets_info))
+
     # 执行测试
-    print(f"\n🚀 开始测试...")
+    print(f"\n  开始测试...")
     start_time = time.monotonic()
     await runner.run_all(probes)
     duration = time.monotonic() - start_time
@@ -107,6 +115,23 @@ async def run(config: TestRunConfig, do_mutate: bool = False, output_dir: str = 
     report = runner.build_report()
     report.duration_seconds = duration
 
+    # 持久化结果
+    storage.end_run(run_id, report.total_probes, report.total_passed, report.total_failed, report.overall_safety_score)
+    for cat_report in report.category_reports.values():
+        for res in cat_report.results:
+            storage.save_probe_result(run_id, {
+                "probe_id": res.probe.id,
+                "category": res.probe.category.value,
+                "vector": res.probe.vector.value,
+                "severity": res.severity.value,
+                "template": res.probe.template,
+                "payload": res.probe.payload,
+                "response": res.response or "",
+                "score": res.score,
+                "passed": res.passed,
+                "error": res.error,
+            })
+
     # 打印摘要
     print_summary(report)
 
@@ -114,7 +139,7 @@ async def run(config: TestRunConfig, do_mutate: bool = False, output_dir: str = 
     engine = ReportEngine(report, output_dir=output_dir)
     engine.generate_all(config.output_formats)
     formats_str = ", ".join(config.output_formats)
-    print(f"📁 报告已生成到: {output_dir}/ ({formats_str})")
+    print(f"  报告已生成到: {output_dir}/ ({formats_str})")
 
     return report
 
@@ -188,7 +213,61 @@ def main():
     parser.add_argument("--list-categories", action="store_true", help="列出所有可用的漏洞类别")
     parser.add_argument("--list-probes", action="store_true", help="列出所有内置探测用例")
 
+    # 持久化子命令
+    subparsers = parser.add_subparsers(dest="subcommand", help="持久化操作")
+    hist_parser = subparsers.add_parser("history", help="查看历史测试记录")
+    hist_parser.add_argument("--limit", type=int, default=20, help="显示条数")
+    hist_parser.add_argument("--db", help="数据库路径")
+
+    diff_parser = subparsers.add_parser("diff", help="对比两次测试结果")
+    diff_parser.add_argument("run_a", help="Run ID A")
+    diff_parser.add_argument("run_b", help="Run ID B")
+    diff_parser.add_argument("--db", help="数据库路径")
+
+    trend_parser = subparsers.add_parser("trend", help="查看安全评分趋势")
+    trend_parser.add_argument("--days", type=int, default=30, help="统计天数")
+    trend_parser.add_argument("--category", help="按类别筛选")
+    trend_parser.add_argument("--db", help="数据库路径")
+
     args = parser.parse_args()
+
+    # 持久化子命令
+    if args.subcommand == "history":
+        storage = get_storage(args.db)
+        rows = storage.get_history(limit=args.limit)
+        if not rows:
+            print("暂无历史记录。")
+        else:
+            print(f"{'Run ID':<38} {'时间':<22} {'模型':<20} {'总分':>6} {'通过/失败':>10}")
+            print("-" * 100)
+            for r in rows:
+                print(f"{r['run_id']:<38} {r['started_at'][:19]:<22} {r['model']:<20} {r['score']:>6.1%} {r['passed']}/{r['total_probes']-r['passed']:>2}/{r['total_probes']}")
+        return
+
+    if args.subcommand == "diff":
+        storage = get_storage(args.db)
+        diff = storage.diff_runs(args.run_a, args.run_b)
+        print(f"Diff: {diff['run_a']} -> {diff['run_b']}")
+        print(f"  新增: {diff['added']}, 移除: {diff['removed']}, 状态变化: {diff['changed']}, 不变: {diff['unchanged']}")
+        for ch in diff["details"]["changed"]:
+            before = "PASS" if ch["before"]["passed"] else "FAIL"
+            after = "PASS" if ch["after"]["passed"] else "FAIL"
+            print(f"  {ch['probe_id']}: {before} -> {after}")
+        return
+
+    if args.subcommand == "trend":
+        storage = get_storage(args.db)
+        trend = storage.get_trend(days=args.days, category=args.category)
+        if not trend:
+            print("暂无趋势数据。")
+        else:
+            print(f"安全评分趋势 (最近 {args.days} 天):")
+            for t in trend:
+                cat_info = ""
+                if args.category:
+                    cat_info = f"  {args.category}: {t.get('category_passed', 0)}/{t.get('category_total', '-')}"
+                print(f"  {t['started_at'][:10]}  {t['model']}  评分: {t['score']:.1%}  通过: {t['passed']}/{t['total_probes']}{cat_info}")
+        return
 
     # 列出类别
     if args.list_categories:

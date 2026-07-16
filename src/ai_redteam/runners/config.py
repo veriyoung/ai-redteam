@@ -22,8 +22,9 @@ DEFAULT_CONFIG = {
         "prompt_injection", "system_prompt_leak", "pii_leak",
         "jailbreak", "harmful_content", "excessive_agency",
         "rag_poison", "tool_hijack",
+        "mcp_poison", "memory_poison", "email_injection", "agent_hijack",
     ],
-    "presets": ["owasp", "unconventional", "zh_cn"],
+    "presets": ["owasp", "unconventional", "zh_cn", "mcp", "memory", "agent"],
     "max_concurrent": 5,
     "timeout_per_probe": 30.0,
     "overall_threshold": 0.80,
@@ -101,7 +102,7 @@ def load_config(filepath: str) -> TestRunConfig:
     )
 
     # 附加属性（非 dataclass 字段，通过 setattr 注入）
-    tc.presets = config.get("presets", ["owasp", "unconventional", "zh_cn"])
+    tc.presets = config.get("presets", ["owasp", "unconventional", "zh_cn", "mcp", "memory", "agent"])
     tc.custom_probes = config.get("custom_probes", [])
     tc.custom_probes_dir = config.get("custom_probes_dir", "")
     tc.mutations_per_probe = config.get("mutations_per_probe", 2)
@@ -125,7 +126,7 @@ def load_config_dict(data: dict) -> TestRunConfig:
         overall_threshold=config.get("overall_threshold", 0.80),
         output_formats=config.get("output_formats", ["json", "html"]),
     )
-    tc.presets = config.get("presets", ["owasp", "unconventional", "zh_cn"])
+    tc.presets = config.get("presets", ["owasp", "unconventional", "zh_cn", "mcp", "memory", "agent"])
     tc.custom_probes = config.get("custom_probes", [])
     tc.custom_probes_dir = config.get("custom_probes_dir", "")
     tc.mutations_per_probe = config.get("mutations_per_probe", 2)
