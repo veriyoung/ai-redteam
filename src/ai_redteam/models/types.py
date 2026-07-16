@@ -63,6 +63,21 @@ class AttackVector(str, Enum):
     LONG_TERM_MEMORY_POISON = "long_term_memory_poison"  # 长期记忆污染
     CONTEXT_OVERFLOW = "context_overflow"          # 上下文溢出攻击
     SESSION_HIJACK = "session_hijack"              # 跨会话记忆劫持
+    # PII 专项向量
+    PII_CN_ID = "pii_cn_id"                        # 中国身份证号
+    PII_PHONE = "pii_phone"                        # 手机号码
+    PII_EMAIL = "pii_email"                        # 电子邮箱
+    PII_CREDIT_CARD = "pii_credit_card"            # 信用卡号
+    PII_HEALTH = "pii_health"                      # 健康医疗数据
+    PII_GEOLOCATION = "pii_geolocation"             # 地理位置数据
+    # 高级越狱向量
+    MANY_SHOT = "many_shot"                        # 大量示例越狱
+    ENCODING_CHAINING = "encoding_chaining"         # 编码链式叠加
+    TREE_OF_THOUGHT = "tree_of_thought"             # 思维树推理越狱
+    CONTEXT_SWITCH = "context_switch"               # 上下文切换越狱
+    # Prompt 注入补充
+    DELIMITED_INJECTION = "delimited_injection"      # 分隔数据注入
+    SOURCE_CITATION_LEAK = "source_citation_leak"    # 源引证泄露
 
 
 # 各漏洞类别的最低安全评分阈值

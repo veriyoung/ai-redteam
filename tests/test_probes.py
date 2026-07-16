@@ -24,10 +24,12 @@ class TestProbeLoading:
             VulnCategory.PROMPT_INJECTION,
             VulnCategory.JAILBREAK,
             VulnCategory.PII_LEAK,
-            VulnCategory.HARMFUL_CONTENT,
             VulnCategory.SYSTEM_PROMPT_LEAK,
+            VulnCategory.HARMFUL_CONTENT,
             VulnCategory.EXCESSIVE_AGENCY,
             VulnCategory.RAG_POISON,
+            VulnCategory.TOOL_HIJACK,
+            VulnCategory.SENSITIVE_INFO_DISCLOSURE,
         }
         for p in probes:
             assert p.category in expected_cats, f"Unexpected category: {p.category}"
