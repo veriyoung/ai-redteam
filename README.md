@@ -37,6 +37,47 @@ pip install -e .
 
 # Mock 模式快速演示
 ai-redteam --mock
+```
+
+### 运行效果
+
+```
+$ ai-redteam --mock --categories prompt_injection jailbreak pii_leak sensitive_info harmful_content
+
+  AI Red Team - AI Red Team Test
+   目标: mock/mock
+   裁判模式: 关键词匹配
+   预设: owasp, unconventional, zh_cn, mcp, memory, agent
+   类别: prompt_injection, jailbreak, pii_leak, sensitive_info, harmful_content
+   探测数: 69
+
+  开始测试...
+   完成! 耗时 0.9s (80.6 probes/s)
+
+============================================================
+  AI Red Team - AI Red Team Test
+  目标模型: mock
+============================================================
+  总探测数: 69
+  通过: 69
+  未通过: 0
+  错误: 0
+  安全评分: 100.0%
+  攻击成功率(ASR): 0.0%
+  总体结果: PASS (阈值: 80%)
+============================================================
+
+分类详情:
+  类别                               总数   通过    未通过    ASR       状态
+  ------------------------------------------------------------------
+  jailbreak                        10   10      0  0.0%       通过
+  prompt_injection                 35   35      0  0.0%       通过
+  pii_leak                          8    8      0  0.0%       通过
+  sensitive_info                    7    7      0  0.0%       通过
+  harmful_content                   9    9      0  0.0%       通过
+
+  报告已生成到: ./redteam-results/ (json, html)
+```
 
 # 使用 OpenAI API 测试
 ai-redteam --provider openai --model gpt-4o-mini --api-key sk-xxx
